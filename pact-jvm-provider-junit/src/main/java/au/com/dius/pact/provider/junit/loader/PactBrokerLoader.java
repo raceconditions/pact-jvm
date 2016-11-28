@@ -5,16 +5,15 @@ import au.com.dius.pact.model.PactReader;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.rholder.retry.RetryException;
-import com.github.rholder.retry.Retryer;
-import com.github.rholder.retry.RetryerBuilder;
-import com.github.rholder.retry.StopStrategies;
-import com.github.rholder.retry.WaitStrategies;
+import com.github.rholder.retry.*;
+import com.google.common.base.Strings;
 import org.apache.commons.io.IOUtils;
+import org.apache.http.Header;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.message.BasicHeader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,10 +21,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -94,9 +90,10 @@ public class PactBrokerLoader implements PactLoader {
       }
       URI brokerUri = uriBuilder.build();
       if (httpResponseCallable == null) {
-        httpResponse = retryer.call(() -> Request.Get(brokerUri)
-          .setHeader(HttpHeaders.ACCEPT, "application/hal+json")
-          .execute().returnResponse());
+          httpResponse = retryer.call(() -> Request.Get(brokerUri)
+                  .setHeader(tryGetAuthorizationHeader())
+                  .setHeader(HttpHeaders.ACCEPT, "application/hal+json")
+                  .execute().returnResponse());
       } else {
         httpResponse = retryer.call(httpResponseCallable);
       }
@@ -130,4 +127,13 @@ public class PactBrokerLoader implements PactLoader {
   public void setHttpResponseCallable(Callable<HttpResponse> httpResponseCallable) {
     this.httpResponseCallable = httpResponseCallable;
   }
+
+    private Header tryGetAuthorizationHeader() {
+        if(!Strings.isNullOrEmpty(System.getProperty("PACT_BROKER_USERNAME")) && !Strings.isNullOrEmpty(System.getProperty("PACT_BROKER_PASSWORD"))) {
+            String userCredentials = String.format("%s:%s", System.getProperty("PACT_BROKER_USERNAME"), System.getProperty("PACT_BROKER_PASSWORD"));
+            String basicAuth = "Basic " + new String(Base64.getEncoder().encode(userCredentials.getBytes()));
+            return new BasicHeader(HttpHeaders.AUTHORIZATION, basicAuth);
+        }
+        return null;
+    }
 }

@@ -1,6 +1,7 @@
 package au.com.dius.pact.provider.junit.target;
 
 import au.com.dius.pact.model.Interaction;
+import au.com.dius.pact.model.Pact;
 import au.com.dius.pact.provider.ConsumerInfo;
 import au.com.dius.pact.provider.PactVerification;
 import au.com.dius.pact.provider.ProviderInfo;
@@ -11,6 +12,7 @@ import au.com.dius.pact.provider.junit.loader.PactFolder;
 import au.com.dius.pact.provider.junit.loader.PactFolderLoader;
 import org.codehaus.groovy.runtime.MethodClosure;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -82,7 +84,10 @@ public class AmqpTarget extends BaseTarget {
       } else if (folder != null && folder.value() != null) {
         try {
           PactFolderLoader folderLoader = new PactFolderLoader(folder);
-          providerInfo.setConsumers(folderLoader.load(providerInfo.getName()).stream().map(pact -> new ConsumerInfo(pact.getConsumer().getName())).collect(Collectors.toList()));
+          Map<Pact, File> pactFileMap = folderLoader.loadPactsWithFiles(providerInfo.getName());
+          providerInfo.setConsumers(pactFileMap.entrySet().stream()
+            .map(e -> new ConsumerInfo(e.getKey().getConsumer().getName(), e.getValue()))
+            .collect(Collectors.toList()));
         } catch (IOException e) {
           e.printStackTrace();
         }
