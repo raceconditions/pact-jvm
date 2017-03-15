@@ -10,6 +10,7 @@ import com.google.common.base.Strings;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpHeaders;
+import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.utils.URIBuilder;
@@ -91,6 +92,7 @@ public class PactBrokerLoader implements PactLoader {
       URI brokerUri = uriBuilder.build();
       if (httpResponseCallable == null) {
           httpResponse = retryer.call(() -> Request.Get(brokerUri)
+                  .viaProxy(tryGetProxy())
                   .setHeader(tryGetAuthorizationHeader())
                   .setHeader(HttpHeaders.ACCEPT, "application/hal+json")
                   .execute().returnResponse());
@@ -115,7 +117,7 @@ public class PactBrokerLoader implements PactLoader {
     final JsonNode fullList = OBJECT_MAPPER.readTree(httpResponse.getEntity().getContent());
     return StreamSupport.stream(fullList.path("_links").path("pacts").spliterator(), false)
             .map(jsonNode -> jsonNode.get("href").asText())
-            .map(PactReader::loadPact)
+            .map((source) -> PactReader.loadPact(tryGetAuthorizationMap(), source))
             .map(obj -> (Pact) obj)
             .collect(toList());
   }
@@ -128,6 +130,19 @@ public class PactBrokerLoader implements PactLoader {
     this.httpResponseCallable = httpResponseCallable;
   }
 
+  private HttpHost tryGetProxy() {
+      String pactBrokerProxyHost = System.getProperty("PACT_BROKER_PROXY_HOST");
+      String pactBrokerProxyPort = System.getProperty("PACT_BROKER_PROXY_PORT");
+      String pactBrokerProxyScheme = System.getProperty("PACT_BROKER_PROXY_SCHEME");
+      if(Strings.isNullOrEmpty(pactBrokerProxyHost) ||
+              Strings.isNullOrEmpty(pactBrokerProxyPort) ||
+              Strings.isNullOrEmpty(pactBrokerProxyScheme)) {
+          return null;
+      } else {
+          return new HttpHost(pactBrokerProxyHost, Integer.valueOf(pactBrokerProxyPort), pactBrokerProxyScheme);
+      }
+  }
+
     private Header tryGetAuthorizationHeader() {
         if(!Strings.isNullOrEmpty(System.getProperty("PACT_BROKER_USERNAME")) && !Strings.isNullOrEmpty(System.getProperty("PACT_BROKER_PASSWORD"))) {
             String userCredentials = String.format("%s:%s", System.getProperty("PACT_BROKER_USERNAME"), System.getProperty("PACT_BROKER_PASSWORD"));
@@ -135,5 +150,13 @@ public class PactBrokerLoader implements PactLoader {
             return new BasicHeader(HttpHeaders.AUTHORIZATION, basicAuth);
         }
         return null;
+    }
+
+    private Map<Integer, String> tryGetAuthorizationMap() {
+        Map authMap = new HashMap<Integer, String>();
+        if(!Strings.isNullOrEmpty(System.getProperty("PACT_BROKER_USERNAME")) && !Strings.isNullOrEmpty(System.getProperty("PACT_BROKER_PASSWORD"))) {
+            authMap.put("authentication", Arrays.asList("Basic", System.getProperty("PACT_BROKER_USERNAME"), System.getProperty("PACT_BROKER_PASSWORD")));
+        }
+        return authMap;
     }
 }

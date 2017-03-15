@@ -38,6 +38,20 @@ class PactBrokerClient {
   def uploadPactFile(File pactFile, String version) {
     def pact = new JsonSlurper().parse(pactFile)
     def http = new HTTPBuilder(pactBrokerUrl)
+    def proxyHost = System.getProperty('PACT_BROKER_PROXY_HOST')
+    def proxyPort = System.getProperty('PACT_BROKER_PROXY_PORT')
+    def proxyScheme = System.getProperty('PACT_BROKER_PROXY_SCHEME')
+    def brokerUser = System.getProperty('PACT_BROKER_USERNAME')
+    def brokerPassword = System.getProperty('PACT_BROKER_PASSWORD')
+
+    if (proxyHost != null &&  proxyPort != null && proxyScheme != null) {
+      http.setProxy(proxyHost, Integer.valueOf( proxyPort), proxyScheme)
+    }
+
+    if (brokerUser != null && brokerPassword != null) {
+      http.auth.basic(brokerUser, brokerPassword)
+    }
+
     http.parser.'application/hal+json' = http.parser.'application/json'
     http.request(PUT, JSON) {
       uri.path = "/pacts/provider/${pact.provider.name}/consumer/${pact.consumer.name}/version/$version"
